@@ -12,9 +12,10 @@ An internal peer-to-peer interaction framework for computers on a shared local n
 
 ## Requirements
 
-- C11-compatible compiler (GCC or Clang)
+- C11-compatible compiler (GCC, Clang, or MSVC)
 - CMake 3.10 or later
-- POSIX-compatible OS (Linux or macOS)
+- On Linux or macOS: a POSIX-like environment
+- On Windows: Visual Studio 2019+ or MinGW-w64 with Winsock2; CMake links `ws2_32` for `10kgp`
 - A shared local network with UDP broadcast enabled (most home and office routers support this by default)
 
 ---
@@ -29,14 +30,29 @@ cmake ..
 make
 ```
 
-The resulting binary is placed at `build/10kgp`.
+The resulting binary is placed at `build/10kgp` (or `build/10kgp.exe` on Windows). The `persi_demo` tool is built as `build/persi_demo` (or `persi_demo.exe`).
 
-To build with debug symbols:
+### Windows
+
+From a **Developer Command Prompt** or any shell where `cmake` and your compiler are on `PATH`:
+
+```bat
+cd 10kgp
+mkdir build && cd build
+cmake -G "Ninja" ..
+cmake --build .
+```
+
+Use a Visual Studio generator if you prefer (`cmake -G "Visual Studio 17 2022" -A x64 ..`). Run `10kgp.exe` from the build directory. Networking uses Winsock2 via [emit/win_emit.c](emit/win_emit.c); console input uses [win_stdin.c](win_stdin.c) so stdin is not mixed with Winsock `select`.
+
+To build with debug symbols (Unix-style generators):
 
 ```bash
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 make
 ```
+
+On Windows with Ninja or MSBuild, add `-DCMAKE_BUILD_TYPE=Debug` when configuring if your generator respects it.
 
 ---
 
@@ -104,10 +120,15 @@ Alias '/o' cleared.
 10kgp/
   main.c        -- CLI, command dispatch, peer state management
   main.h        -- Top-level includes
-  header.h      -- Common system and POSIX headers
+  header.h      -- Common headers (POSIX); on Windows includes win_header.h
+  win_header.h  -- Winsock2 and Windows C runtime includes
+  win_stdin.c   -- Windows-only background stdin reader (used with Winsock select)
+  win_compat.h  -- Small portability macros (e.g. unlink)
   emit/
-    emit.c      -- UDP broadcast implementation
+    emit.c      -- UDP broadcast (POSIX)
+    win_emit.c  -- UDP broadcast (Windows Winsock2)
     emit.h      -- Public API for the emit module
+  persi/        -- File-backed store (portable C)
   CMakeLists.txt
 ```
 

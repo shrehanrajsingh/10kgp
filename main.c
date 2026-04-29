@@ -1,6 +1,10 @@
 #include "main.h"
 #include <stdio.h>
 
+#ifdef _WIN32
+#include "win_stdin.h"
+#endif
+
 #define PEER_TIMEOUT_SEC 30
 #define PULSE_INTERVAL_SEC 5
 #define MAX_ALIASES 32
@@ -413,6 +417,15 @@ main (int argc, char **argv)
 
   printf ("\nPeer discovery started. Type /help for commands.\n\n");
 
+#ifdef _WIN32
+  if (win_stdin_reader_start () != 0)
+    {
+      fprintf (stderr, "Failed to start stdin reader\n");
+      emit_cleanup ();
+      return 1;
+    }
+#endif
+
   /* Send initial pulse */
   emit_pulse ();
   g_last_pulse = time (NULL);
@@ -442,50 +455,82 @@ main (int argc, char **argv)
           awaiting_input = 0;
         }
 
-      /* Use select to wait for either stdin or network data */
+      /* Wait for network (and stdin on POSIX); Windows stdin via win_stdin */
       fd_set read_fds;
       struct timeval tv;
+      int sock = emit_get_socket_fd ();
 
       FD_ZERO (&read_fds);
+#ifdef _WIN32
+      if (sock >= 0)
+        FD_SET ((SOCKET)(intptr_t)sock, &read_fds);
+#else
       FD_SET (STDIN_FILENO, &read_fds);
-      FD_SET (emit_get_socket_fd (), &read_fds);
+      if (sock >= 0)
+        FD_SET (sock, &read_fds);
+#endif
 
       tv.tv_sec = 1; /* 1 second timeout for pulse interval check */
       tv.tv_usec = 0;
 
-      int ready
-          = select (emit_get_socket_fd () + 1, &read_fds, NULL, NULL, &tv);
+#ifdef _WIN32
+      int nfds = 0; /* ignored on Winsock */
+#else
+      int nfds = sock >= 0 ? sock + 1 : STDIN_FILENO + 1;
+#endif
+
+      int ready = select (nfds, &read_fds, NULL, NULL, &tv);
 
       if (ready < 0)
         {
+#ifdef _WIN32
+          int w = WSAGetLastError ();
+          if (w == WSAEINTR)
+            continue;
+          fprintf (stderr, "select: winsock error %d\n", w);
+#else
           if (errno == EINTR)
-            {
-              continue; /* Interrupted, continue loop */
-            }
+            continue; /* Interrupted, continue loop */
           perror ("select");
+#endif
           break;
         }
 
       if (ready > 0)
         {
-          /* Check for network data first */
-          if (FD_ISSET (emit_get_socket_fd (), &read_fds))
+#ifdef _WIN32
+          if (sock >= 0 && FD_ISSET ((SOCKET)(intptr_t)sock, &read_fds))
+#else
+          if (sock >= 0 && FD_ISSET (sock, &read_fds))
+#endif
             {
               emit_listen (on_peer_detected, NULL, 0);
             }
 
-          /* Check for stdin input */
+#ifndef _WIN32
           if (FD_ISSET (STDIN_FILENO, &read_fds))
             {
               if (fgets (input, sizeof (input), stdin) != NULL)
                 {
                   running = !process_command (input);
-                  awaiting_input = 1; /* Ready for next input */
+                  awaiting_input = 1;
                 }
             }
+#endif
         }
+
+#ifdef _WIN32
+      if (win_stdin_try_line (input, sizeof (input)))
+        {
+          running = !process_command (input);
+          awaiting_input = 1;
+        }
+#endif
     }
 
+#ifdef _WIN32
+  win_stdin_reader_stop ();
+#endif
   emit_cleanup ();
   return 0;
 }
