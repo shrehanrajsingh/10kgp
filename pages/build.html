@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Build — 10KGP</title>
+</head>
+<body>
+
+<nav>
+  <p><a href="index.html">Home</a>
+   | <a href="build.html">Build</a>
+   | <a href="run.html">Run</a>
+   | <a href="architecture.html">Architecture</a>
+   | <a href="discovery.html">Discovery</a>
+   | <a href="persi.html">Persi</a></p>
+</nav>
+
+<hr>
+
+<h1>Build</h1>
+
+<h2>Requirements</h2>
+
+<ul>
+  <li>C11-compatible compiler (GCC, Clang, or MSVC)</li>
+  <li>CMake 3.10 or later</li>
+  <li>Linux or macOS: POSIX-like environment</li>
+  <li>Windows: Visual Studio 2019+ or MinGW-w64 with Winsock2; CMake links <code>ws2_32</code> and <code>iphlpapi</code> for <code>10kgp</code></li>
+</ul>
+
+<h2>Unix (Linux / macOS)</h2>
+
+<pre><code>git clone &lt;repository-url&gt;
+cd 10kgp
+mkdir build &amp;&amp; cd build
+cmake ..
+make</code></pre>
+
+<p>Outputs:</p>
+
+<ul>
+  <li><code>build/10kgp</code> — peer discovery CLI</li>
+  <li><code>build/persi_demo</code> — Persi demo binary</li>
+</ul>
+
+<h2>Windows</h2>
+
+<p>From a Developer Command Prompt or any shell where <code>cmake</code> and your compiler are on <code>PATH</code>:</p>
+
+<pre><code>cd 10kgp
+mkdir build &amp;&amp; cd build
+cmake -G "Ninja" ..
+cmake --build .</code></pre>
+
+<p>Use a Visual Studio generator if you prefer, for example:</p>
+
+<pre><code>cmake -G "Visual Studio 17 2022" -A x64 ..</code></pre>
+
+<p>Run <code>10kgp.exe</code> from the build directory. Networking uses Winsock2 via <code>emit/win_emit.c</code>; console input uses <code>win_stdin.c</code> so stdin is not mixed with Winsock <code>select</code>.</p>
+
+<h2>Debug build</h2>
+
+<p>Unix-style generators:</p>
+
+<pre><code>cmake -DCMAKE_BUILD_TYPE=Debug ..
+make</code></pre>
+
+<p>On Windows with Ninja or MSBuild, pass <code>-DCMAKE_BUILD_TYPE=Debug</code> at configure time if your generator respects it.</p>
+
+<p><a href="index.html">← Home</a></p>
+
+</body>
+</html>

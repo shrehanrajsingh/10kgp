@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Persi — 10KGP</title>
+</head>
+<body>
+
+<nav>
+  <p><a href="index.html">Home</a>
+   | <a href="build.html">Build</a>
+   | <a href="run.html">Run</a>
+   | <a href="architecture.html">Architecture</a>
+   | <a href="discovery.html">Discovery</a>
+   | <a href="persi.html">Persi</a></p>
+</nav>
+
+<hr>
+
+<h1>Persi</h1>
+
+<p><strong>Persi</strong> is a portable C library in <code>persi/</code>: a file-backed store with a SQL-oriented API (<code>persi_exec_sql</code>) plus typed table helpers. It is built as a static library and exercised by <code>persi_demo</code> (<code>persi/demo.c</code>).</p>
+
+<p>The peer-discovery binary <code>10kgp</code> does not link Persi today; Persi is an independent component in the same repository.</p>
+
+<h2>Column types</h2>
+
+<ul>
+  <li><code>PERSI_TYPE_INT</code></li>
+  <li><code>PERSI_TYPE_FLOAT</code></li>
+  <li><code>PERSI_TYPE_STRING</code></li>
+</ul>
+
+<h2>Limits</h2>
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr><th>Macro</th><th>Value</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>PERSI_MAX_COLS</code></td><td>16</td></tr>
+    <tr><td><code>PERSI_MAX_TABLES</code></td><td>64</td></tr>
+    <tr><td><code>PERSI_MAX_NAME</code></td><td>32</td></tr>
+    <tr><td><code>PERSI_MAX_STRING</code></td><td>4095</td></tr>
+  </tbody>
+</table>
+
+<h2>Return codes</h2>
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr><th>Constant</th><th>Value</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>PERSI_OK</code></td><td>0</td></tr>
+    <tr><td><code>PERSI_ERR</code></td><td>-1</td></tr>
+    <tr><td><code>PERSI_ERR_IO</code></td><td>-2</td></tr>
+    <tr><td><code>PERSI_ERR_NOMEM</code></td><td>-3</td></tr>
+    <tr><td><code>PERSI_ERR_EXISTS</code></td><td>-4</td></tr>
+    <tr><td><code>PERSI_ERR_NOTFOUND</code></td><td>-5</td></tr>
+    <tr><td><code>PERSI_ERR_SCHEMA</code></td><td>-6</td></tr>
+    <tr><td><code>PERSI_ERR_BOUNDS</code></td><td>-7</td></tr>
+    <tr><td><code>PERSI_ERR_PARSE</code></td><td>-8</td></tr>
+    <tr><td><code>PERSI_ERR_FORMAT</code></td><td>-9</td></tr>
+  </tbody>
+</table>
+
+<p>Use <code>persi_strerror(int code)</code> for a human-readable message.</p>
+
+<h2>Main functions (<code>persi.h</code>)</h2>
+
+<ul>
+  <li><code>persi_open</code>, <code>persi_close</code>, <code>persi_sync</code> — database file lifecycle</li>
+  <li><code>persi_create_table</code> — define columns (<code>persi_coldef_t</code>)</li>
+  <li><code>persi_insert</code> — insert row; optional <code>out_row_id</code></li>
+  <li><code>persi_scan_table</code>, <code>persi_scan_where_eq</code> — iterate rows via <code>persi_row_fn</code></li>
+  <li><code>persi_update_row</code>, <code>persi_update_where_eq</code></li>
+  <li><code>persi_delete_row</code>, <code>persi_delete_where_eq</code></li>
+  <li><code>persi_exec_sql</code> — execute SQL; optional <code>persi_result_t</code> for selects</li>
+  <li><code>persi_result_free</code> — free query result</li>
+</ul>
+
+<p>For concrete usage, read <code>persi/demo.c</code> next to the headers and implementation split (<code>persi_core.c</code>, <code>persi_sql.c</code>, <code>persi_format.c</code>, <code>persi_value.c</code>).</p>
+
+<p><a href="index.html">← Home</a></p>
+
+</body>
+</html>
