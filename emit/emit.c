@@ -1,8 +1,8 @@
 #include "emit.h"
+#include "emit_bcast.h"
 
 static int g_socket_fd = -1;
 static uint16_t g_port = 0;
-static struct sockaddr_in g_broadcast_addr;
 static char g_peer_id[EMIT_PEER_ID_LEN] = { 0 };
 
 int
@@ -57,12 +57,6 @@ emit_init (uint16_t port)
       return -1;
     }
 
-  /* Setup broadcast address */
-  memset (&g_broadcast_addr, 0, sizeof (g_broadcast_addr));
-  g_broadcast_addr.sin_family = AF_INET;
-  g_broadcast_addr.sin_addr.s_addr = inet_addr ("255.255.255.255");
-  g_broadcast_addr.sin_port = htons (port);
-
   return 0;
 }
 
@@ -86,10 +80,21 @@ emit_pulse (void)
   char packet[EMIT_PACKET_SIZE] = { 0 };
   strncpy (packet, g_peer_id, sizeof (packet) - 1);
 
-  ssize_t sent = sendto (g_socket_fd, packet, strlen (packet), 0,
-                         (struct sockaddr *)&g_broadcast_addr,
-                         sizeof (g_broadcast_addr));
-  if (sent < 0)
+  struct sockaddr_in targets[EMIT_BCAST_MAX_TARGETS];
+  size_t nt = emit_bcast_collect (targets, EMIT_BCAST_MAX_TARGETS);
+  int any_ok = 0;
+
+  for (size_t i = 0; i < nt; i++)
+    {
+      targets[i].sin_port = htons (g_port);
+      ssize_t sent = sendto (g_socket_fd, packet, strlen (packet), 0,
+                             (struct sockaddr *)&targets[i],
+                             sizeof (targets[i]));
+      if (sent >= 0)
+        any_ok = 1;
+    }
+
+  if (!any_ok)
     {
       perror ("sendto");
       return -1;
@@ -129,33 +134,35 @@ emit_listen (peer_callback_t callback, void *user_data, int timeout_ms)
       return 0;
     }
 
-  /* Data available */
-  char buffer[EMIT_PACKET_SIZE];
-  struct sockaddr_in from_addr;
-  socklen_t from_len = sizeof (from_addr);
-
-  ssize_t recv_len = recvfrom (g_socket_fd, buffer, sizeof (buffer) - 1, 0,
-                               (struct sockaddr *)&from_addr, &from_len);
-  if (recv_len < 0)
+  /* Drain queued datagrams (Wi‑Fi / stacks may batch broadcasts). */
+  for (;;)
     {
-      perror ("recvfrom");
-      return -1;
-    }
+      char buffer[EMIT_PACKET_SIZE];
+      struct sockaddr_in from_addr;
+      socklen_t from_len = sizeof (from_addr);
 
-  buffer[recv_len] = '\0';
+      ssize_t recv_len = recvfrom (g_socket_fd, buffer, sizeof (buffer) - 1,
+                                   MSG_DONTWAIT, (struct sockaddr *)&from_addr,
+                                   &from_len);
+      if (recv_len < 0)
+        {
+          if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            break;
+          perror ("recvfrom");
+          return -1;
+        }
 
-  /* Build peer info */
-  peer_info_t peer;
-  memset (&peer, 0, sizeof (peer));
-  strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
-  peer.ip_address = from_addr.sin_addr;
-  peer.port = ntohs (from_addr.sin_port);
-  peer.timestamp = time (NULL);
+      buffer[recv_len] = '\0';
 
-  /* Invoke callback */
-  if (callback)
-    {
-      callback (&peer, user_data);
+      peer_info_t peer;
+      memset (&peer, 0, sizeof (peer));
+      strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
+      peer.ip_address = from_addr.sin_addr;
+      peer.port = ntohs (from_addr.sin_port);
+      peer.timestamp = time (NULL);
+
+      if (callback)
+        callback (&peer, user_data);
     }
 
   return 0;
@@ -170,7 +177,6 @@ emit_cleanup (void)
       g_socket_fd = -1;
     }
   g_port = 0;
-  memset (&g_broadcast_addr, 0, sizeof (g_broadcast_addr));
   memset (g_peer_id, 0, sizeof (g_peer_id));
 }
 

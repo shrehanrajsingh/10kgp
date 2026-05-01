@@ -1,4 +1,5 @@
 #include "emit.h"
+#include "emit_bcast.h"
 #include "win_emit.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -6,7 +7,6 @@
 
 static SOCKET g_sock = INVALID_SOCKET;
 static uint16_t g_port = 0;
-static struct sockaddr_in g_broadcast_addr;
 static char g_peer_id[EMIT_PEER_ID_LEN] = { 0 };
 static int g_wsa_refcount = 0;
 
@@ -109,11 +109,6 @@ emit_init (uint16_t port)
       return -1;
     }
 
-  memset (&g_broadcast_addr, 0, sizeof (g_broadcast_addr));
-  g_broadcast_addr.sin_family = AF_INET;
-  g_broadcast_addr.sin_addr.s_addr = inet_addr ("255.255.255.255");
-  g_broadcast_addr.sin_port = htons (port);
-
   g_wsa_refcount++;
   return 0;
 }
@@ -137,10 +132,21 @@ emit_pulse (void)
   char packet[EMIT_PACKET_SIZE] = { 0 };
   strncpy (packet, g_peer_id, sizeof (packet) - 1);
 
-  int sent = sendto (g_sock, packet, (int)strlen (packet), 0,
-                     (struct sockaddr *)&g_broadcast_addr,
-                     sizeof (g_broadcast_addr));
-  if (sent == SOCKET_ERROR)
+  struct sockaddr_in targets[EMIT_BCAST_MAX_TARGETS];
+  size_t nt = emit_bcast_collect (targets, EMIT_BCAST_MAX_TARGETS);
+  int any_ok = 0;
+
+  for (size_t i = 0; i < nt; i++)
+    {
+      targets[i].sin_port = htons (g_port);
+      int sent = sendto (g_sock, packet, (int)strlen (packet), 0,
+                         (struct sockaddr *)&targets[i],
+                         sizeof (targets[i]));
+      if (sent != SOCKET_ERROR)
+        any_ok = 1;
+    }
+
+  if (!any_ok)
     {
       int w = WSAGetLastError ();
       emit_sock_err ("sendto", w);
@@ -181,31 +187,37 @@ emit_listen (peer_callback_t callback, void *user_data, int timeout_ms)
   if (ready == 0)
     return 0;
 
-  char buffer[EMIT_PACKET_SIZE];
-  struct sockaddr_in from_addr;
-  int from_len = (int)sizeof (from_addr);
-
-  int recv_len = recvfrom (g_sock, buffer, (int)sizeof (buffer) - 1, 0,
-                           (struct sockaddr *)&from_addr, &from_len);
-  if (recv_len == SOCKET_ERROR)
+  for (;;)
     {
-      int w = WSAGetLastError ();
-      emit_sock_err ("recvfrom", w);
-      map_wsa_to_errno (w);
-      return -1;
+      char buffer[EMIT_PACKET_SIZE];
+      struct sockaddr_in from_addr;
+      int from_len = (int)sizeof (from_addr);
+
+      int recv_len = recvfrom (g_sock, buffer, (int)sizeof (buffer) - 1,
+                               MSG_DONTWAIT, (struct sockaddr *)&from_addr,
+                               &from_len);
+      if (recv_len == SOCKET_ERROR)
+        {
+          int w = WSAGetLastError ();
+          if (w == WSAEWOULDBLOCK || w == WSAEINTR)
+            break;
+          emit_sock_err ("recvfrom", w);
+          map_wsa_to_errno (w);
+          return -1;
+        }
+
+      buffer[recv_len] = '\0';
+
+      peer_info_t peer;
+      memset (&peer, 0, sizeof (peer));
+      strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
+      peer.ip_address = from_addr.sin_addr;
+      peer.port = ntohs (from_addr.sin_port);
+      peer.timestamp = time (NULL);
+
+      if (callback)
+        callback (&peer, user_data);
     }
-
-  buffer[recv_len] = '\0';
-
-  peer_info_t peer;
-  memset (&peer, 0, sizeof (peer));
-  strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
-  peer.ip_address = from_addr.sin_addr;
-  peer.port = ntohs (from_addr.sin_port);
-  peer.timestamp = time (NULL);
-
-  if (callback)
-    callback (&peer, user_data);
 
   return 0;
 }
@@ -226,7 +238,6 @@ emit_cleanup (void)
         }
     }
   g_port = 0;
-  memset (&g_broadcast_addr, 0, sizeof (g_broadcast_addr));
   memset (g_peer_id, 0, sizeof (g_peer_id));
 }
 

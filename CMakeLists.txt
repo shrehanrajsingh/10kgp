@@ -17,13 +17,14 @@ add_executable(10kgp
     win_header.h
     ${EMIT_SRC}
     emit/emit.h
+    emit/emit_bcast.c
     ${WIN_EXTRA_SRC}
 )
 
 target_include_directories(10kgp PRIVATE ${CMAKE_SOURCE_DIR})
 
 if(WIN32)
-  target_link_libraries(10kgp PRIVATE ws2_32)
+  target_link_libraries(10kgp PRIVATE ws2_32 iphlpapi)
 endif()
 
 add_library(persi STATIC

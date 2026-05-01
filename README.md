@@ -125,16 +125,21 @@ Alias '/o' cleared.
   win_stdin.c   -- Windows-only background stdin reader (used with Winsock select)
   win_compat.h  -- Small portability macros (e.g. unlink)
   emit/
-    emit.c      -- UDP broadcast (POSIX)
-    win_emit.c  -- UDP broadcast (Windows Winsock2)
-    emit.h      -- Public API for the emit module
+    emit.c          -- UDP broadcast (POSIX)
+    emit_bcast.c    -- Collect subnet + limited broadcast targets
+    win_emit.c      -- UDP broadcast (Windows Winsock2)
+    emit.h          -- Public API for the emit module
   persi/        -- File-backed store (portable C)
   CMakeLists.txt
 ```
 
 ### Peer Discovery (emit)
 
-The `emit` module handles all network I/O. It opens a single UDP socket with `SO_BROADCAST` and `SO_REUSEADDR` enabled, bound to port 9999. Every 5 seconds the main loop calls `emit_pulse()`, which sends the local peer ID as a raw ASCII packet to the broadcast address. Incoming packets are received in the same loop via `select()` and delivered to a caller-supplied callback.
+The `emit` module handles all network I/O. It opens a single UDP socket with `SO_BROADCAST` and `SO_REUSEADDR` enabled, bound to port 9999. Every 5 seconds the main loop calls `emit_pulse()`, which sends the local peer ID as a raw ASCII packet to **every IPv4 broadcast address** discovered on local interfaces (subnet-directed, e.g. `192.168.1.255`) plus the limited broadcast `255.255.255.255`. Many Wi‑Fi routers drop limited broadcast between clients; subnet broadcasts usually work on typical `/24` home LANs. Implementation: [emit/emit_bcast.c](emit/emit_bcast.c).
+
+When data is ready on the socket, `emit_listen()` drains **all** queued UDP datagrams (`MSG_DONTWAIT`) so bursts are not missed after `select()`.
+
+If peers still never appear: confirm both machines are on the same LAN subnet, turn off **AP / client isolation** on the router if enabled, and allow **UDP port 9999** through host firewalls (Windows Defender Firewall prompts or inbound rule).
 
 Peers are tracked in a fixed-size array of up to 64 entries. Any peer not seen within 30 seconds is considered stale and removed from the list.
 
