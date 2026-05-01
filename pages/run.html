@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Run — 10KGP</title>
+</head>
+<body>
+
+<nav>
+  <p><a href="index.html">Home</a>
+   | <a href="build.html">Build</a>
+   | <a href="run.html">Run</a>
+   | <a href="architecture.html">Architecture</a>
+   | <a href="discovery.html">Discovery</a>
+   | <a href="persi.html">Persi</a></p>
+</nav>
+
+<hr>
+
+<h1>Run</h1>
+
+<pre><code>./build/10kgp</code></pre>
+
+<p>On launch you are prompted for a <strong>peer ID</strong> — a short identifier (up to 31 characters) that other peers see. Examples: username, hostname, or any unique label.</p>
+
+<pre><code>=== Peer Discovery ===
+
+Enter your peer ID: alice</code></pre>
+
+<p>After entering your ID, the program sends an initial discovery pulse and listens for others. The <code>&gt;</code> prompt accepts commands.</p>
+
+<h2>Commands</h2>
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr><th>Command</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>/online</code></td><td>List all peers currently online</td></tr>
+    <tr><td><code>/peers</code></td><td>Alias for <code>/online</code></td></tr>
+    <tr><td><code>/count</code></td><td>Print the number of online peers</td></tr>
+    <tr><td><code>/refresh</code></td><td>Send a discovery pulse immediately</td></tr>
+    <tr><td><code>/clear</code></td><td>Clear the terminal screen</td></tr>
+    <tr><td><code>/alias &lt;command&gt; &lt;alias&gt;</code></td><td>Create a shorthand for a command</td></tr>
+    <tr><td><code>/show-alias</code></td><td>List all defined aliases</td></tr>
+    <tr><td><code>/clear-alias &lt;alias&gt;</code></td><td>Remove a specific alias</td></tr>
+    <tr><td><code>/help</code></td><td>Show the help message</td></tr>
+    <tr><td><code>/exit</code></td><td>Exit the application</td></tr>
+    <tr><td><code>/quit</code></td><td>Alias for <code>/exit</code></td></tr>
+  </tbody>
+</table>
+
+<h2>Aliases</h2>
+
+<p>Aliases bind a shorter name to a built-in command for the session only; they are not saved between runs.</p>
+
+<pre><code>&gt; /alias online o
+Alias '/o' -&gt; '/online' created.
+
+&gt; /o
+Online peers (2):
+...
+
+&gt; /show-alias
+Aliases (1):
+  Alias            -&gt; Command
+  ----------------    -------
+  /o               -&gt; /online
+
+&gt; /clear-alias o
+Alias '/o' cleared.</code></pre>
+
+<p><a href="index.html">← Home</a></p>
+
+</body>
+</html>

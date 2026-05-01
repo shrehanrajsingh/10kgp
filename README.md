@@ -2,6 +2,8 @@
 
 An internal peer-to-peer interaction framework for computers on a shared local network. The application runs entirely in the terminal, uses UDP broadcast for peer discovery, and is designed to be extended with additional communication modules over time.
 
+**Documentation:** static HTML in [`pages/`](pages/). Publish with GitHub Pages by choosing **Settings → Pages → Build and deployment → Source: GitHub Actions** (workflow [`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
+
 ---
 
 ## Overview

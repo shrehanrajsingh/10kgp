@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Discovery (emit) — 10KGP</title>
+</head>
+<body>
+
+<nav>
+  <p><a href="index.html">Home</a>
+   | <a href="build.html">Build</a>
+   | <a href="run.html">Run</a>
+   | <a href="architecture.html">Architecture</a>
+   | <a href="discovery.html">Discovery</a>
+   | <a href="persi.html">Persi</a></p>
+</nav>
+
+<hr>
+
+<h1>Peer discovery (<code>emit</code>)</h1>
+
+<p>The <code>emit</code> module handles UDP discovery for <code>10kgp</code>. It opens one UDP socket with <code>SO_BROADCAST</code> and <code>SO_REUSEADDR</code>, bound to <strong>port 9999</strong> (fixed in <code>main.c</code> for the CLI).</p>
+
+<h2>Three transmission paths</h2>
+
+<p>Every pulse sends the local peer ID on all of the following:</p>
+
+<ol>
+  <li><strong>IPv4 broadcast targets</strong> — Subnet-directed broadcasts plus limited broadcast (<code>255.255.255.255</code>), collected from interfaces (<code>emit_bcast.c</code>).</li>
+  <li><strong>Multicast</strong> — Group <code>239.255.43.210</code> (RFC 2365 administratively scoped), same port; the socket joins the group per interface (<code>emit_mcast.c</code>).</li>
+  <li><strong>LAN unicast sweep</strong> — For each local IPv4 subnet that looks “LAN-sized” (mask implies at most 254 hosts, typically /24), directed UDP to each address <code>.1</code>–<code>.254</code> except local IPs (<code>emit_lan_scan.c</code>). This helps when access points block wireless broadcast or multicast between clients.</li>
+</ol>
+
+<p>Pulses are sent every <code>PULSE_INTERVAL_SEC</code> (5 seconds) and can be triggered manually with <code>/refresh</code>.</p>
+
+<h2>Packet format</h2>
+
+<p>The UDP payload is the sender’s peer ID as a null-terminated ASCII string (length limited by <code>EMIT_PEER_ID_LEN</code> and the send buffer).</p>
+
+<h2>Receiving and the main loop</h2>
+
+<ul>
+  <li><strong><code>emit_listen(callback, user_data, timeout_ms)</code></strong> — Blocks on <code>select</code> until the socket is readable or the timeout elapses; then drains queued datagrams with <code>recvfrom(..., MSG_DONTWAIT)</code> until the queue is empty.</li>
+  <li><strong><code>emit_recv_drain(callback, user_data)</code></strong> — Drains queued datagrams only (non-blocking). The <code>10kgp</code> main loop calls this after <strong>every</strong> successful <code>select</code> (whether stdin or the socket woke up), because on some hosts the UDP socket can have queued packets while <code>select</code> omits it from the readable set when stdin is monitored in the same fd set.</li>
+</ul>
+
+<h2>Diagnostics</h2>
+
+<p>Set environment variable <code>10KGDP_TRACE=1</code> to print pulse and receive lines to stderr (helpful on restrictive networks).</p>
+
+<pre><code>10KGDP_TRACE=1 ./build/10kgp</code></pre>
+
+<h2>C API summary</h2>
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr><th>Function</th><th>Role</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>emit_init(uint16_t port)</code></td><td>Create socket, bind, enlarge buffers, join multicast</td></tr>
+    <tr><td><code>emit_set_peer_id(const char *id)</code></td><td>Set ID sent in pulses</td></tr>
+    <tr><td><code>emit_pulse(void)</code></td><td>Broadcast + multicast + LAN sweep</td></tr>
+    <tr><td><code>emit_listen(...)</code></td><td><code>select</code> then drain</td></tr>
+    <tr><td><code>emit_recv_drain(...)</code></td><td>Non-blocking drain only</td></tr>
+    <tr><td><code>emit_get_socket_fd(void)</code></td><td>Fd for application <code>select</code></td></tr>
+    <tr><td><code>emit_cleanup(void)</code></td><td>Leave multicast, close socket</td></tr>
+  </tbody>
+</table>
+
+<p>Callback type <code>peer_callback_t</code> receives <code>peer_info_t</code> (<code>peer_id</code>, <code>ip_address</code>, <code>port</code>, <code>timestamp</code>).</p>
+
+<h2>Troubleshooting</h2>
+
+<ul>
+  <li>Both machines must be on the <strong>same LAN subnet</strong> for broadcasts to apply.</li>
+  <li>Disable <strong>AP / client isolation</strong> on the router if wireless clients cannot see each other.</li>
+  <li>Allow <strong>UDP port 9999</strong> inbound on host firewalls if discovery is one-way.</li>
+  <li><strong>VPN</strong> tunnels may capture the default route and interfere with LAN discovery.</li>
+</ul>
+
+<p><a href="index.html">← Home</a></p>
+
+</body>
+</html>

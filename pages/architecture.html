@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Architecture — 10KGP</title>
+</head>
+<body>
+
+<nav>
+  <p><a href="index.html">Home</a>
+   | <a href="build.html">Build</a>
+   | <a href="run.html">Run</a>
+   | <a href="architecture.html">Architecture</a>
+   | <a href="discovery.html">Discovery</a>
+   | <a href="persi.html">Persi</a></p>
+</nav>
+
+<hr>
+
+<h1>Architecture</h1>
+
+<h2>Directory layout</h2>
+
+<pre><code>10kgp/
+  main.c        -- CLI, command dispatch, peer state management
+  main.h        -- Top-level includes
+  header.h      -- Common headers (POSIX); on Windows includes win_header.h
+  win_header.h  -- Winsock2 and Windows C runtime includes
+  win_stdin.c   -- Windows-only background stdin reader (used with Winsock select)
+  win_compat.h  -- Small portability macros (e.g. unlink)
+  emit/
+    emit.c          -- UDP discovery (POSIX)
+    emit_bcast.c    -- Collect subnet + limited broadcast targets
+    emit_mcast.c    -- IPv4 multicast join + multicast destination
+    emit_lan_scan.c -- Unicast sweep on local /24-sized subnets
+    win_emit.c      -- UDP discovery (Windows Winsock2)
+    emit.h          -- Public API for the emit module
+  persi/        -- File-backed store (portable C)
+  CMakeLists.txt</code></pre>
+
+<h2>Roles</h2>
+
+<ul>
+  <li><strong>main.c</strong> — Interactive loop, peer table (up to <code>EMIT_MAX_PEERS</code>), periodic pulses, <code>select</code> on stdin and UDP socket; calls <code>emit_recv_drain</code> after each successful <code>select</code> so queued datagrams are not missed.</li>
+  <li><strong>emit/</strong> — Single UDP socket, discovery pulses, multicast membership, optional diagnostics.</li>
+  <li><strong>persi/</strong> — Static library used by <code>persi_demo</code>; not wired into <code>10kgp</code> today.</li>
+</ul>
+
+<h2>Constants (discovery / peers)</h2>
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr><th>Name</th><th>Value</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>EMIT_MAX_PEERS</code></td><td>64</td><td>Maximum tracked peers</td></tr>
+    <tr><td><code>EMIT_PEER_ID_LEN</code></td><td>32</td><td>Max peer ID string length (including null)</td></tr>
+    <tr><td><code>EMIT_PACKET_SIZE</code></td><td>256</td><td>Maximum UDP payload buffer size</td></tr>
+    <tr><td><code>PEER_TIMEOUT_SEC</code></td><td>30</td><td>Seconds before a peer is dropped</td></tr>
+    <tr><td><code>PULSE_INTERVAL_SEC</code></td><td>5</td><td>Seconds between automatic pulses</td></tr>
+    <tr><td><code>EMIT_MULTICAST_GROUP</code></td><td><code>239.255.43.210</code></td><td>IPv4 multicast group (same UDP port as unicast)</td></tr>
+  </tbody>
+</table>
+
+<h2>Planned modules</h2>
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr><th>Module</th><th>Description</th><th>Status</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>emit</code></td><td>UDP discovery</td><td>In progress</td></tr>
+    <tr><td><code>lms</code></td><td>Local Mail Server</td><td>Not started</td></tr>
+    <tr><td><code>cft</code></td><td>Chunk-based File Transfer</td><td>Not started</td></tr>
+  </tbody>
+</table>
+
+<h2>Contributing</h2>
+
+<p>New modules should live in their own subdirectory (like <code>emit/</code>), register sources in <code>CMakeLists.txt</code>, and document a public API (for example a <code>README.md</code> in the module).</p>
+
+<p><a href="index.html">← Home</a></p>
+
+</body>
+</html>

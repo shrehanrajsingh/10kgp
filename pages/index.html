@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>10KGP — Documentation</title>
+</head>
+<body>
+
+<nav>
+  <p><a href="index.html">Home</a>
+   | <a href="build.html">Build</a>
+   | <a href="run.html">Run</a>
+   | <a href="architecture.html">Architecture</a>
+   | <a href="discovery.html">Discovery</a>
+   | <a href="persi.html">Persi</a></p>
+</nav>
+
+<hr>
+
+<h1>10KGP</h1>
+
+<p>An internal peer-to-peer interaction framework for computers on a shared local network. The application runs in the terminal, uses UDP for peer discovery, and is designed to be extended with additional communication modules over time.</p>
+
+<p><a href="https://github.com/shrehanrajsingh/10kgp">Project repository on GitHub</a> (replace with your fork URL if different).</p>
+
+<h2>What it does</h2>
+
+<ul>
+  <li>Discovers other instances on the same LAN (Wi‑Fi or wired).</li>
+  <li>Tracks peer IDs and addresses with timeouts.</li>
+  <li>Provides a simple slash-command CLI (<code>/online</code>, <code>/refresh</code>, etc.).</li>
+  <li>Includes the <strong>emit</strong> discovery library and the separate <strong>Persi</strong> file-backed store library.</li>
+</ul>
+
+<h2>Documentation sections</h2>
+
+<ul>
+  <li><a href="build.html">Build</a> — toolchain, CMake, Windows and Unix.</li>
+  <li><a href="run.html">Run</a> — peer ID, commands, aliases.</li>
+  <li><a href="architecture.html">Architecture</a> — layout, constants, roadmap.</li>
+  <li><a href="discovery.html">Discovery</a> — UDP paths, port, API, troubleshooting.</li>
+  <li><a href="persi.html">Persi</a> — embedded store API.</li>
+</ul>
+
+<h2>Hosting this site (GitHub Pages)</h2>
+
+<p>The HTML lives under <code>pages/</code> in the repo. GitHub’s branch settings only publish from the repo root or <code>docs/</code>, so this project uses a <strong>GitHub Actions</strong> workflow (<code>.github/workflows/pages.yml</code>) that uploads the <code>pages/</code> folder as the Pages artifact.</p>
+
+<p>In the repository: <strong>Settings → Pages → Build and deployment → Source: GitHub Actions</strong>. Pushes to <code>main</code> deploy the site.</p>
+
+<hr>
+<p><small>10KGP documentation (static HTML, no CSS).</small></p>
+
+</body>
+</html>
