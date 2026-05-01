@@ -23,7 +23,24 @@
 
 #endif
 
+#ifndef _WIN32
+#include <time.h>
+#else
+#include <windows.h>
+#endif
+
 #define EMIT_LAN_DEDUP_CAP 1024
+
+static void
+sweep_throttle (void)
+{
+#ifndef _WIN32
+  struct timespec ts = { 0, 100000L }; /* 100 µs: avoids bursting peers' UDP queues */
+  (void)nanosleep (&ts, NULL);
+#else
+  Sleep (0);
+#endif
+}
 
 static int
 dedup_push (uint32_t *tab, size_t *n, uint32_t addr_be)
@@ -124,6 +141,7 @@ emit_lan_sweep_send (emit_sock_t sock, uint16_t port_host_order,
                       sizeof (dst))
               != SOCKET_ERROR)
             ok++;
+          sweep_throttle ();
         }
     }
 
@@ -205,6 +223,7 @@ emit_lan_sweep_send (emit_sock_t sock, uint16_t port_host_order,
                               sizeof (dst));
           if (s >= 0)
             ok++;
+          sweep_throttle ();
         }
     }
 

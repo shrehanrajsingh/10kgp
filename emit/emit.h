@@ -33,6 +33,11 @@ int emit_pulse (void);
 /* Listen for peer signals. Returns when timeout_ms elapses or on error */
 int emit_listen (peer_callback_t callback, void *user_data, int timeout_ms);
 
+/* Drain queued UDP datagrams without blocking (MSG_DONTWAIT). Call each main-
+ * loop iteration after select(): some stacks omit the socket from the readable
+ * set while datagrams are already queued; unconditional drain avoids that. */
+int emit_recv_drain (peer_callback_t callback, void *user_data);
+
 /* Cleanup and close sockets */
 void emit_cleanup (void);
 

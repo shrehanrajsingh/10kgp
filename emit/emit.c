@@ -4,6 +4,7 @@
 #include "emit_lan_scan.h"
 #include "emit_mcast.h"
 #include "emit_sock.h"
+#include <arpa/inet.h>
 
 static int g_socket_fd = -1;
 static uint16_t g_port = 0;
@@ -60,6 +61,14 @@ emit_init (uint16_t port)
       g_socket_fd = -1;
       return -1;
     }
+
+  /* Larger UDP buffers: LAN sweep sends hundreds of probes; macOS defaults
+     drop inbound bursts before Linux does (Ubuntu sees Mac but not vice versa). */
+  {
+    int big = 4 * 1024 * 1024;
+    (void)setsockopt (g_socket_fd, SOL_SOCKET, SO_RCVBUF, &big, sizeof big);
+    (void)setsockopt (g_socket_fd, SOL_SOCKET, SO_SNDBUF, &big, sizeof big);
+  }
 
   if (emit_mcast_join ((emit_sock_t)g_socket_fd) != 0 && emit_diag_trace ())
     fprintf (stderr,
@@ -130,6 +139,57 @@ emit_pulse (void)
 }
 
 int
+emit_recv_drain (peer_callback_t callback, void *user_data)
+{
+  if (g_socket_fd < 0)
+    {
+      errno = ENOTCONN;
+      return -1;
+    }
+
+  for (;;)
+    {
+      char buffer[EMIT_PACKET_SIZE];
+      struct sockaddr_in from_addr;
+      socklen_t from_len = sizeof (from_addr);
+
+      ssize_t recv_len = recvfrom (g_socket_fd, buffer, sizeof (buffer) - 1,
+                                   MSG_DONTWAIT, (struct sockaddr *)&from_addr,
+                                   &from_len);
+      if (recv_len < 0)
+        {
+          if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+            break;
+          perror ("recvfrom");
+          return -1;
+        }
+
+      buffer[recv_len] = '\0';
+
+      if (emit_diag_trace ())
+        {
+          char ip_str[INET_ADDRSTRLEN];
+          inet_ntop (AF_INET, &from_addr.sin_addr, ip_str, sizeof ip_str);
+          fprintf (stderr,
+                   "10kgp recv: %zd bytes from %s:%u peer_id=\"%s\"\n",
+                   recv_len, ip_str, ntohs (from_addr.sin_port), buffer);
+        }
+
+      peer_info_t peer;
+      memset (&peer, 0, sizeof (peer));
+      strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
+      peer.ip_address = from_addr.sin_addr;
+      peer.port = ntohs (from_addr.sin_port);
+      peer.timestamp = time (NULL);
+
+      if (callback)
+        callback (&peer, user_data);
+    }
+
+  return 0;
+}
+
+int
 emit_listen (peer_callback_t callback, void *user_data, int timeout_ms)
 {
   if (g_socket_fd < 0)
@@ -160,38 +220,7 @@ emit_listen (peer_callback_t callback, void *user_data, int timeout_ms)
       return 0;
     }
 
-  /* Drain queued datagrams (Wi‑Fi / stacks may batch broadcasts). */
-  for (;;)
-    {
-      char buffer[EMIT_PACKET_SIZE];
-      struct sockaddr_in from_addr;
-      socklen_t from_len = sizeof (from_addr);
-
-      ssize_t recv_len = recvfrom (g_socket_fd, buffer, sizeof (buffer) - 1,
-                                   MSG_DONTWAIT, (struct sockaddr *)&from_addr,
-                                   &from_len);
-      if (recv_len < 0)
-        {
-          if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-            break;
-          perror ("recvfrom");
-          return -1;
-        }
-
-      buffer[recv_len] = '\0';
-
-      peer_info_t peer;
-      memset (&peer, 0, sizeof (peer));
-      strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
-      peer.ip_address = from_addr.sin_addr;
-      peer.port = ntohs (from_addr.sin_port);
-      peer.timestamp = time (NULL);
-
-      if (callback)
-        callback (&peer, user_data);
-    }
-
-  return 0;
+  return emit_recv_drain (callback, user_data);
 }
 
 void

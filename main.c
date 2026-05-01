@@ -496,17 +496,14 @@ main (int argc, char **argv)
           break;
         }
 
+      /* Drain UDP whenever select returns; do not rely on FD_ISSET(sock): with
+       * stdin in the same fd_set, some hosts omit the socket while packets are
+       * queued — stderr tracing happened to slow the loop enough to hide it. */
+      if (sock >= 0)
+        emit_recv_drain (on_peer_detected, NULL);
+
       if (ready > 0)
         {
-#ifdef _WIN32
-          if (sock >= 0 && FD_ISSET ((SOCKET)(intptr_t)sock, &read_fds))
-#else
-          if (sock >= 0 && FD_ISSET (sock, &read_fds))
-#endif
-            {
-              emit_listen (on_peer_detected, NULL, 0);
-            }
-
 #ifndef _WIN32
           if (FD_ISSET (STDIN_FILENO, &read_fds))
             {

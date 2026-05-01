@@ -112,6 +112,14 @@ emit_init (uint16_t port)
       return -1;
     }
 
+  {
+    int big = 4 * 1024 * 1024;
+    (void)setsockopt (g_sock, SOL_SOCKET, SO_RCVBUF, (const char *)&big,
+                      sizeof big);
+    (void)setsockopt (g_sock, SOL_SOCKET, SO_SNDBUF, (const char *)&big,
+                      sizeof big);
+  }
+
   if (emit_mcast_join (g_sock) != 0 && emit_diag_trace ())
     fprintf (stderr,
              "10kgp: warning: multicast join failed (discovery may be degraded)\n");
@@ -182,6 +190,56 @@ emit_pulse (void)
 }
 
 int
+emit_recv_drain (peer_callback_t callback, void *user_data)
+{
+  if (g_sock == INVALID_SOCKET)
+    {
+      errno = ENOTCONN;
+      return -1;
+    }
+
+  for (;;)
+    {
+      char buffer[EMIT_PACKET_SIZE];
+      struct sockaddr_in from_addr;
+      int from_len = (int)sizeof (from_addr);
+
+      int recv_len = recvfrom (g_sock, buffer, (int)sizeof (buffer) - 1,
+                               MSG_DONTWAIT, (struct sockaddr *)&from_addr,
+                               &from_len);
+      if (recv_len == SOCKET_ERROR)
+        {
+          int w = WSAGetLastError ();
+          if (w == WSAEWOULDBLOCK || w == WSAEINTR)
+            break;
+          emit_sock_err ("recvfrom", w);
+          map_wsa_to_errno (w);
+          return -1;
+        }
+
+      buffer[recv_len] = '\0';
+
+      if (emit_diag_trace ())
+        fprintf (
+            stderr,
+            "10kgp recv: %d bytes from %s:%u peer_id=\"%s\"\n", recv_len,
+            inet_ntoa (from_addr.sin_addr), ntohs (from_addr.sin_port), buffer);
+
+      peer_info_t peer;
+      memset (&peer, 0, sizeof (peer));
+      strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
+      peer.ip_address = from_addr.sin_addr;
+      peer.port = ntohs (from_addr.sin_port);
+      peer.timestamp = time (NULL);
+
+      if (callback)
+        callback (&peer, user_data);
+    }
+
+  return 0;
+}
+
+int
 emit_listen (peer_callback_t callback, void *user_data, int timeout_ms)
 {
   if (g_sock == INVALID_SOCKET)
@@ -211,39 +269,7 @@ emit_listen (peer_callback_t callback, void *user_data, int timeout_ms)
   if (ready == 0)
     return 0;
 
-  for (;;)
-    {
-      char buffer[EMIT_PACKET_SIZE];
-      struct sockaddr_in from_addr;
-      int from_len = (int)sizeof (from_addr);
-
-      int recv_len = recvfrom (g_sock, buffer, (int)sizeof (buffer) - 1,
-                               MSG_DONTWAIT, (struct sockaddr *)&from_addr,
-                               &from_len);
-      if (recv_len == SOCKET_ERROR)
-        {
-          int w = WSAGetLastError ();
-          if (w == WSAEWOULDBLOCK || w == WSAEINTR)
-            break;
-          emit_sock_err ("recvfrom", w);
-          map_wsa_to_errno (w);
-          return -1;
-        }
-
-      buffer[recv_len] = '\0';
-
-      peer_info_t peer;
-      memset (&peer, 0, sizeof (peer));
-      strncpy (peer.peer_id, buffer, EMIT_PEER_ID_LEN - 1);
-      peer.ip_address = from_addr.sin_addr;
-      peer.port = ntohs (from_addr.sin_port);
-      peer.timestamp = time (NULL);
-
-      if (callback)
-        callback (&peer, user_data);
-    }
-
-  return 0;
+  return emit_recv_drain (callback, user_data);
 }
 
 void
