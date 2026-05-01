@@ -18,6 +18,8 @@ add_executable(10kgp
     ${EMIT_SRC}
     emit/emit.h
     emit/emit_bcast.c
+    emit/emit_mcast.c
+    emit/emit_lan_scan.c
     ${WIN_EXTRA_SRC}
 )
 

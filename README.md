@@ -127,6 +127,8 @@ Alias '/o' cleared.
   emit/
     emit.c          -- UDP broadcast (POSIX)
     emit_bcast.c    -- Collect subnet + limited broadcast targets
+    emit_mcast.c    -- IPv4 multicast join + multicast destination
+    emit_lan_scan.c -- Unicast sweep on local /24-sized subnets
     win_emit.c      -- UDP broadcast (Windows Winsock2)
     emit.h          -- Public API for the emit module
   persi/        -- File-backed store (portable C)
@@ -135,11 +137,13 @@ Alias '/o' cleared.
 
 ### Peer Discovery (emit)
 
-The `emit` module handles all network I/O. It opens a single UDP socket with `SO_BROADCAST` and `SO_REUSEADDR` enabled, bound to port 9999. Every 5 seconds the main loop calls `emit_pulse()`, which sends the local peer ID as a raw ASCII packet to **every IPv4 broadcast address** discovered on local interfaces (subnet-directed, e.g. `192.168.1.255`) plus the limited broadcast `255.255.255.255`. Many Wi‑Fi routers drop limited broadcast between clients; subnet broadcasts usually work on typical `/24` home LANs. Implementation: [emit/emit_bcast.c](emit/emit_bcast.c).
+The `emit` module handles all network I/O. It opens a single UDP socket with `SO_BROADCAST` and `SO_REUSEADDR` enabled, bound to port 9999. Every 5 seconds `emit_pulse()` sends the peer ID on **three paths**: (1) IPv4 broadcast addresses from [emit/emit_bcast.c](emit/emit_bcast.c), (2) UDP multicast to `239.255.43.210` (same port), after joining the group via [emit/emit_mcast.c](emit/emit_mcast.c), and (3) **directed unicast** to every usable host on each local IPv4 subnet whose mask is “LAN-sized” (at most 254 hosts—typically `/24`, e.g. `192.168.1.1`–`192.168.1.254`) via [emit/emit_lan_scan.c](emit/emit_lan_scan.c). The unicast sweep is intentionally aggressive so discovery still works when Wi‑Fi APs block broadcast and multicast between wireless clients.
+
+Set environment variable `10KGDP_TRACE=1` to print a short line each pulse (stderr).
 
 When data is ready on the socket, `emit_listen()` drains **all** queued UDP datagrams (`MSG_DONTWAIT`) so bursts are not missed after `select()`.
 
-If peers still never appear: confirm both machines are on the same LAN subnet, turn off **AP / client isolation** on the router if enabled, and allow **UDP port 9999** through host firewalls (Windows Defender Firewall prompts or inbound rule).
+If peers still never appear: confirm both machines are on the same LAN subnet, turn off **AP / client isolation** on the router if enabled, allow **UDP port 9999** inbound on host firewalls, and avoid VPN interfaces that capture the default route away from Wi‑Fi.
 
 Peers are tracked in a fixed-size array of up to 64 entries. Any peer not seen within 30 seconds is considered stale and removed from the list.
 

@@ -1,6 +1,9 @@
 #include "emit.h"
 #include "emit_bcast.h"
-#include "win_emit.h"
+#include "emit_diag.h"
+#include "emit_lan_scan.h"
+#include "emit_mcast.h"
+#include "emit_sock.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -109,6 +112,10 @@ emit_init (uint16_t port)
       return -1;
     }
 
+  if (emit_mcast_join (g_sock) != 0 && emit_diag_trace ())
+    fprintf (stderr,
+             "10kgp: warning: multicast join failed (discovery may be degraded)\n");
+
   g_wsa_refcount++;
   return 0;
 }
@@ -131,20 +138,37 @@ emit_pulse (void)
 
   char packet[EMIT_PACKET_SIZE] = { 0 };
   strncpy (packet, g_peer_id, sizeof (packet) - 1);
+  size_t pkt_len = strlen (packet);
+
+  int any_ok = 0;
 
   struct sockaddr_in targets[EMIT_BCAST_MAX_TARGETS];
   size_t nt = emit_bcast_collect (targets, EMIT_BCAST_MAX_TARGETS);
-  int any_ok = 0;
 
   for (size_t i = 0; i < nt; i++)
     {
       targets[i].sin_port = htons (g_port);
-      int sent = sendto (g_sock, packet, (int)strlen (packet), 0,
+      int sent = sendto (g_sock, packet, (int)pkt_len, 0,
                          (struct sockaddr *)&targets[i],
                          sizeof (targets[i]));
       if (sent != SOCKET_ERROR)
         any_ok = 1;
     }
+
+  struct sockaddr_in mc;
+  emit_mcast_dest (&mc, g_port);
+  if (sendto (g_sock, packet, (int)pkt_len, 0, (struct sockaddr *)&mc,
+              sizeof (mc))
+      != SOCKET_ERROR)
+    any_ok = 1;
+
+  if (emit_lan_sweep_send (g_sock, g_port, packet, pkt_len) > 0)
+    any_ok = 1;
+
+  if (emit_diag_trace ())
+    fprintf (stderr,
+             "10kgp pulse: %zu broadcast targets + multicast %s + LAN sweep\n",
+             nt, EMIT_MULTICAST_GROUP);
 
   if (!any_ok)
     {
@@ -227,6 +251,7 @@ emit_cleanup (void)
 {
   if (g_sock != INVALID_SOCKET)
     {
+      emit_mcast_leave (g_sock);
       closesocket (g_sock);
       g_sock = INVALID_SOCKET;
 

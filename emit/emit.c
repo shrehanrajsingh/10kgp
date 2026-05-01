@@ -1,5 +1,9 @@
 #include "emit.h"
 #include "emit_bcast.h"
+#include "emit_diag.h"
+#include "emit_lan_scan.h"
+#include "emit_mcast.h"
+#include "emit_sock.h"
 
 static int g_socket_fd = -1;
 static uint16_t g_port = 0;
@@ -57,6 +61,10 @@ emit_init (uint16_t port)
       return -1;
     }
 
+  if (emit_mcast_join ((emit_sock_t)g_socket_fd) != 0 && emit_diag_trace ())
+    fprintf (stderr,
+             "10kgp: warning: multicast join failed (discovery may be degraded)\n");
+
   return 0;
 }
 
@@ -79,20 +87,38 @@ emit_pulse (void)
   /* Packet format: [peer_id] */
   char packet[EMIT_PACKET_SIZE] = { 0 };
   strncpy (packet, g_peer_id, sizeof (packet) - 1);
+  size_t pkt_len = strlen (packet);
+
+  int any_ok = 0;
 
   struct sockaddr_in targets[EMIT_BCAST_MAX_TARGETS];
   size_t nt = emit_bcast_collect (targets, EMIT_BCAST_MAX_TARGETS);
-  int any_ok = 0;
 
   for (size_t i = 0; i < nt; i++)
     {
       targets[i].sin_port = htons (g_port);
-      ssize_t sent = sendto (g_socket_fd, packet, strlen (packet), 0,
+      ssize_t sent = sendto (g_socket_fd, packet, pkt_len, 0,
                              (struct sockaddr *)&targets[i],
                              sizeof (targets[i]));
       if (sent >= 0)
         any_ok = 1;
     }
+
+  struct sockaddr_in mc;
+  emit_mcast_dest (&mc, g_port);
+  if (sendto (g_socket_fd, packet, pkt_len, 0, (struct sockaddr *)&mc,
+              sizeof (mc))
+      >= 0)
+    any_ok = 1;
+
+  if (emit_lan_sweep_send ((emit_sock_t)g_socket_fd, g_port, packet, pkt_len)
+      > 0)
+    any_ok = 1;
+
+  if (emit_diag_trace ())
+    fprintf (stderr,
+             "10kgp pulse: %zu broadcast targets + multicast %s + LAN sweep\n",
+             nt, EMIT_MULTICAST_GROUP);
 
   if (!any_ok)
     {
@@ -173,6 +199,7 @@ emit_cleanup (void)
 {
   if (g_socket_fd >= 0)
     {
+      emit_mcast_leave ((emit_sock_t)g_socket_fd);
       close (g_socket_fd);
       g_socket_fd = -1;
     }

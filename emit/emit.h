@@ -6,6 +6,9 @@
 #define EMIT_PACKET_SIZE 256
 #define EMIT_PEER_ID_LEN 32
 
+/* Administratively scoped IPv4 multicast (RFC 2365); complements UDP broadcast. */
+#define EMIT_MULTICAST_GROUP "239.255.43.210"
+
 /* Peer information struct passed to callbacks */
 typedef struct
 {
@@ -24,7 +27,7 @@ int emit_init (uint16_t port);
 /* Set this peer's unique identifier */
 void emit_set_peer_id (const char *id);
 
-/* Send a broadcast pulse to 255.255.255.255 */
+/* Send discovery pulses (broadcast + multicast + LAN sweep) */
 int emit_pulse (void);
 
 /* Listen for peer signals. Returns when timeout_ms elapses or on error */
